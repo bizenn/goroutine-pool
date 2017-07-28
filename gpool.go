@@ -50,6 +50,34 @@ func (j *BaseJob) Wait() {
 	j.WaitGroup.Wait()
 }
 
+// ProcJob ...
+type ProcJob struct {
+	BaseJob
+	proc func() error
+}
+
+// NewProcJob ...
+func NewProcJob(proc func() error) *ProcJob {
+	j := &ProcJob{
+		proc: proc,
+	}
+	j.Add(1)
+	return j
+}
+
+// LogProperties ...
+func (j *ProcJob) LogProperties() logrus.Fields {
+	return logrus.Fields{
+		"Name": "ProcJob",
+	}
+}
+
+// Do ...
+func (j *ProcJob) Do() error {
+	defer j.Done()
+	return j.proc()
+}
+
 func makeJobProcessor(ch <-chan Job) func() {
 	return func() {
 		for {
