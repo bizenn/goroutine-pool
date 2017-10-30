@@ -12,16 +12,11 @@ type Job interface {
 	LogProperties() logrus.Fields
 	SetError(error)
 	GetError() error
-	// Assumed to embed sync.WaitGroup in
-	Add(int)
-	Done()
-	Wait()
 }
 
 // BaseJob ...
 type BaseJob struct {
 	Job
-	sync.WaitGroup
 	err error
 }
 
@@ -35,31 +30,18 @@ func (j *BaseJob) GetError() error {
 	return j.err
 }
 
-// Add ...
-func (j *BaseJob) Add(delta int) {
-	j.WaitGroup.Add(delta)
-}
-
-// Done ...
-func (j *BaseJob) Done() {
-	j.WaitGroup.Done()
-}
-
-// Wait ...
-func (j *BaseJob) Wait() {
-	j.WaitGroup.Wait()
-}
-
 // ProcJob ...
 type ProcJob struct {
 	BaseJob
+	*sync.WaitGroup
 	proc func() error
 }
 
 // NewProcJob ...
 func NewProcJob(proc func() error) *ProcJob {
 	j := &ProcJob{
-		proc: proc,
+		proc:      proc,
+		WaitGroup: new(sync.WaitGroup),
 	}
 	j.Add(1)
 	return j
@@ -84,9 +66,7 @@ func makeJobProcessor(ch <-chan Job) func() {
 			select {
 			case job, ok := <-ch:
 				if ok {
-					job.Add(1)
 					proc := func() {
-						defer job.Done()
 						job.SetError(job.Do())
 					}
 					proc()
