@@ -2,38 +2,18 @@ package gpool
 
 import (
 	"sync"
-
-	"github.com/sirupsen/logrus"
 )
 
 // Job ...
 type Job interface {
 	Do() error
-	LogProperties() logrus.Fields
-	SetError(error)
-	GetError() error
-}
-
-// BaseJob ...
-type BaseJob struct {
-	Job
-	err error
-}
-
-// SetError ...
-func (j *BaseJob) SetError(err error) {
-	j.err = err
-}
-
-// GetError ...
-func (j *BaseJob) GetError() error {
-	return j.err
 }
 
 // ProcJob ...
 type ProcJob struct {
-	BaseJob
+	Job
 	*sync.WaitGroup
+	err  error
 	proc func() error
 }
 
@@ -47,17 +27,17 @@ func NewProcJob(proc func() error) *ProcJob {
 	return j
 }
 
-// LogProperties ...
-func (j *ProcJob) LogProperties() logrus.Fields {
-	return logrus.Fields{
-		"Name": "ProcJob",
-	}
-}
-
 // Do ...
 func (j *ProcJob) Do() error {
 	defer j.Done()
-	return j.proc()
+	j.err = j.proc()
+	return j.err
+}
+
+// GetError ...
+func (j *ProcJob) GetError() error {
+	j.Wait()
+	return j.err
 }
 
 func makeJobProcessor(ch <-chan Job) func() {
@@ -67,12 +47,11 @@ func makeJobProcessor(ch <-chan Job) func() {
 			case job, ok := <-ch:
 				if ok {
 					proc := func() {
-						job.SetError(job.Do())
+						_ = job.Do()
 					}
 					proc()
 					continue
 				}
-				break
 			}
 			break
 		}
