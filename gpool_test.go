@@ -45,6 +45,26 @@ func TestPool(t *testing.T) {
 	p.Shutdown()
 }
 
+func TestZeroPool(t *testing.T) {
+	p := NewPool(0)
+	if count := p.Count(); count != 1 {
+		t.Errorf("Expected 1 but got %d", count)
+	}
+
+	var wg sync.WaitGroup
+	j := newTestJob(&wg)
+	if j.result != 0 {
+		t.Errorf("Expected 0 but got %d", j.result)
+	}
+	p.Channel() <- j
+	wg.Wait()
+	if j.result != 1 {
+		t.Errorf("Expected 1 but got %d", j.result)
+	}
+
+	p.Shutdown()
+}
+
 func TestProcJob(t *testing.T) {
 	p := NewPool(1)
 	var wg sync.WaitGroup

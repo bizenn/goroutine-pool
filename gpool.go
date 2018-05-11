@@ -67,6 +67,9 @@ type Pool struct {
 
 // NewPool ...
 func NewPool(concurrency int) *Pool {
+	if concurrency < 1 {
+		concurrency = 1
+	}
 	ch := make(chan Job)
 	p := &Pool{
 		count: concurrency,
