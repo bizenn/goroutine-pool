@@ -60,7 +60,7 @@ func makeJobProcessor(ch <-chan Job) func() {
 
 // Pool ...
 type Pool struct {
-	sync.WaitGroup
+	wg    *sync.WaitGroup
 	count int
 	ch    chan<- Job
 }
@@ -72,14 +72,15 @@ func NewPool(concurrency int) *Pool {
 	}
 	ch := make(chan Job)
 	p := &Pool{
+		wg:    new(sync.WaitGroup),
 		count: concurrency,
 		ch:    ch,
 	}
 	proc := makeJobProcessor(ch)
 	for i := 0; i < concurrency; i++ {
-		p.Add(1)
+		p.wg.Add(1)
 		go func() {
-			defer p.Done()
+			defer p.wg.Done()
 			proc()
 		}()
 	}
@@ -99,5 +100,5 @@ func (p *Pool) Count() int {
 // Shutdown ...
 func (p *Pool) Shutdown() {
 	close(p.ch)
-	p.Wait()
+	p.wg.Wait()
 }
