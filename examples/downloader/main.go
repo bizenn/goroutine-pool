@@ -4,23 +4,22 @@ import (
 	"bufio"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/bizenn/goroutine-pool"
-	"github.com/sirupsen/logrus"
+	gpool "github.com/bizenn/goroutine-pool"
 )
 
 // DownloadJob ...
 type DownloadJob struct {
 	gpool.Job
 	*sync.WaitGroup
-	client  *http.Client
-	url     string
-	logging *logrus.Entry
+	client *http.Client
+	url    string
 }
 
 // NewDownloadJob ...
@@ -29,7 +28,6 @@ func NewDownloadJob(wg *sync.WaitGroup, c *http.Client, u string) *DownloadJob {
 		WaitGroup: wg,
 		client:    c,
 		url:       u,
-		logging:   logrus.WithField("url", u),
 	}
 	j.Add(1)
 	return j
@@ -42,27 +40,30 @@ func (j *DownloadJob) Do() (err error) {
 	if u, err = url.Parse(j.url); err == nil {
 		var dest = filepath.Join(".", u.Path)
 		var dir = filepath.Dir(dest)
-		os.MkdirAll(dir, 0777)
-		var res *http.Response
-		if res, err = j.client.Get(j.url); err == nil {
-			if res.StatusCode == http.StatusOK {
-				var out *os.File
-				if out, err = ioutil.TempFile(dir, filepath.Base(dest)); err == nil {
-					if _, err = io.Copy(out, res.Body); err == nil {
-						err = os.Rename(out.Name(), dest)
+		if err = os.MkdirAll(dir, 0777); err == nil {
+			var res *http.Response
+			if res, err = j.client.Get(j.url); err == nil {
+				if res.StatusCode != http.StatusOK {
+					log.Printf("%s: %q", res.Status, j.url)
+				} else {
+					var out *os.File
+					if out, err = ioutil.TempFile(dir, filepath.Base(dest)); err == nil {
+						if _, err = io.Copy(out, res.Body); err == nil {
+							err = os.Rename(out.Name(), dest)
+						}
+						_ = out.Close()
+						_ = os.Remove(out.Name())
 					}
-					out.Close()
-					os.Remove(out.Name())
 				}
+				_, _ = io.Copy(ioutil.Discard, res.Body)
+				_ = res.Body.Close()
 			}
-			io.Copy(ioutil.Discard, res.Body)
-			res.Body.Close()
 		}
 	}
 	if err != nil {
-		j.logging.WithError(err).Warn("failed")
+		log.Printf("%s: %q", err, j.url)
 	} else {
-		j.logging.Info("done")
+		log.Printf("Downloaded: %q", j.url)
 	}
 	return err
 }

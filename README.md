@@ -11,10 +11,8 @@ arbitrary fixed number of goroutine to process "job".
 
 ## Required
 
-Only by examples.
-
-- logrus: github.com/sirupsen/logrus
+None
 
 ## Full Example
 
-Refer "examples" directory.
+See "examples" directory.
