@@ -1,89 +1,37 @@
 package gpool
 
-import (
-	"sync"
-)
-
 // Job ...
 type Job interface {
-	Do() error
-}
-
-// ProcJob ...
-type ProcJob struct {
-	Job
-	*sync.WaitGroup
-	err  error
-	proc func() error
-}
-
-// NewProcJob ...
-func NewProcJob(proc func() error) *ProcJob {
-	j := &ProcJob{
-		proc:      proc,
-		WaitGroup: new(sync.WaitGroup),
-	}
-	j.Add(1)
-	return j
-}
-
-// Do ...
-func (j *ProcJob) Do() error {
-	defer j.Done()
-	j.err = j.proc()
-	return j.err
-}
-
-// GetError ...
-func (j *ProcJob) GetError() error {
-	j.Wait()
-	return j.err
-}
-
-func makeJobProcessor(ch <-chan Job) func() {
-	return func() {
-		for {
-			select {
-			case job, ok := <-ch:
-				if ok {
-					proc := func() {
-						_ = job.Do()
-					}
-					proc()
-					continue
-				}
-			}
-			break
-		}
-	}
+	Do()
 }
 
 // Pool ...
 type Pool struct {
-	wg    *sync.WaitGroup
-	count int
-	ch    chan<- Job
+	pipeline *Pipeline
+	ch       chan Job
+	in       chan<- interface{}
+	out      <-chan interface{}
 }
 
 // NewPool ...
-func NewPool(concurrency int) *Pool {
-	if concurrency < 1 {
-		concurrency = 1
+func NewPool(concurrency int) (p *Pool) {
+	p = &Pool{
+		pipeline: NewPipeline(NewStage(concurrency, func(in <-chan interface{}, out chan<- interface{}) {
+			for v := range in {
+				job := v.(Job)
+				job.Do()
+			}
+		})),
+		ch: make(chan Job),
 	}
-	ch := make(chan Job)
-	p := &Pool{
-		wg:    new(sync.WaitGroup),
-		count: concurrency,
-		ch:    ch,
-	}
-	proc := makeJobProcessor(ch)
-	for i := 0; i < concurrency; i++ {
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			proc()
-		}()
-	}
+	p.in, p.out = p.pipeline.Start()
+	// Just convert chan<- Job to chan<- interface{}
+	go func() {
+		for job := range p.ch {
+			p.in <- job
+		}
+		close(p.in)
+	}()
 	return p
 }
 
@@ -94,11 +42,15 @@ func (p *Pool) Channel() chan<- Job {
 
 // Count ...
 func (p *Pool) Count() int {
-	return p.count
+	return p.pipeline.stages[0].concurrent
 }
 
 // Shutdown ...
 func (p *Pool) Shutdown() {
-	close(p.ch)
-	p.wg.Wait()
+	close(p.Channel())
+}
+
+// Wait ...
+func (p *Pool) Wait() {
+	<-p.out
 }
