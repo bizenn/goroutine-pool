@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
 
 	gpool "github.com/bizenn/goroutine-pool"
 )
@@ -17,26 +16,23 @@ import (
 // DownloadJob ...
 type DownloadJob struct {
 	gpool.Job
-	*sync.WaitGroup
 	client *http.Client
 	url    string
 }
 
 // NewDownloadJob ...
-func NewDownloadJob(wg *sync.WaitGroup, c *http.Client, u string) *DownloadJob {
+func NewDownloadJob(c *http.Client, u string) *DownloadJob {
 	var j = &DownloadJob{
-		WaitGroup: wg,
-		client:    c,
-		url:       u,
+		client: c,
+		url:    u,
 	}
-	j.Add(1)
 	return j
 }
 
 // Do ...
-func (j *DownloadJob) Do() (err error) {
-	defer j.Done()
+func (j *DownloadJob) Do() {
 	var u *url.URL
+	var err error
 	if u, err = url.Parse(j.url); err == nil {
 		var dest = filepath.Join(".", u.Path)
 		var dir = filepath.Dir(dest)
@@ -65,16 +61,14 @@ func (j *DownloadJob) Do() (err error) {
 	} else {
 		log.Printf("Downloaded: %q", j.url)
 	}
-	return err
 }
 
 func main() {
-	var wg sync.WaitGroup
 	var gp = gpool.NewPool(2) // 2 goroutine started.
 	var in = bufio.NewScanner(os.Stdin)
 	for in.Scan() {
-		gp.Channel() <- NewDownloadJob(&wg, http.DefaultClient, in.Text())
+		gp.Channel() <- NewDownloadJob(http.DefaultClient, in.Text())
 	}
-	wg.Wait()
 	gp.Shutdown()
+	gp.Wait()
 }
