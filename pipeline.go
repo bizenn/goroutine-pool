@@ -48,8 +48,8 @@ func (p *Pipeline) Add(s *Stage) {
 
 // Start ...
 func (p *Pipeline) Start() (chan<- interface{}, <-chan interface{}) {
-	var input = make(chan interface{})
-	var output = input
+	input := make(chan interface{})
+	output := input
 	for _, s := range p.stages {
 		prev := output
 		output = make(chan interface{})
