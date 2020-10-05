@@ -11,7 +11,6 @@ type Proc func(<-chan interface{}, chan<- interface{})
 type Stage struct {
 	proc       Proc
 	concurrent int
-	wg         *sync.WaitGroup
 }
 
 // NewStage ...
@@ -23,7 +22,6 @@ func NewStage(concurrent int, proc Proc) *Stage {
 	return &Stage{
 		proc:       proc,
 		concurrent: concurrent,
-		wg:         &sync.WaitGroup{},
 	}
 }
 
@@ -51,17 +49,18 @@ func (p *Pipeline) Start() (chan<- interface{}, <-chan interface{}) {
 	input := make(chan interface{})
 	output := input
 	for _, s := range p.stages {
+		wg := &sync.WaitGroup{}
 		prev := output
 		output = make(chan interface{})
 		for i := 0; i < s.concurrent; i++ {
-			s.wg.Add(1)
+			wg.Add(1)
 			go func(s *Stage, in <-chan interface{}, out chan<- interface{}) {
 				s.proc(in, out)
-				s.wg.Done()
+				wg.Done()
 			}(s, prev, output)
 		}
 		go func(s *Stage, out chan<- interface{}) {
-			s.wg.Wait()
+			wg.Wait()
 			close(out)
 		}(s, output)
 	}
