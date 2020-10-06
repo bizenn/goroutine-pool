@@ -37,7 +37,7 @@ func TestPipeline(t *testing.T) {
 		t.Errorf("Expected %d but got %d", expected, total.(int))
 	}
 
-	in, out = p.Start()
+	_, _ = p.Start()
 	in, out = p.Start()
 	go func() {
 		for i := 0; i < 10; i++ {
