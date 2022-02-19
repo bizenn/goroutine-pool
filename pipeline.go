@@ -66,3 +66,32 @@ func (p *Pipeline) Start() (chan<- interface{}, <-chan interface{}) {
 	}
 	return input, output
 }
+
+type BranchProc func(<-chan interface{}, []chan<- interface{})
+
+func BranchRun(proc BranchProc, concurrent int, in <-chan interface{}, outs []chan<- interface{}) {
+	var wg sync.WaitGroup
+	for i := 0; i < concurrent; i++ {
+		wg.Add(1)
+		go func(in <-chan interface{}, outs []chan<- interface{}) {
+			proc(in, outs)
+			wg.Done()
+		}(in, outs)
+	}
+	go func(outs []chan<- interface{}) {
+		wg.Wait()
+		for _, out := range outs {
+			close(out)
+		}
+	}(outs)
+}
+
+func Branch(in <-chan interface{}, outs []chan<- interface{}) {
+	BranchRun(func(in <-chan interface{}, outs []chan<- interface{}) {
+		for v := range in {
+			for _, out := range outs {
+				out <- v
+			}
+		}
+	}, 1, in, outs)
+}
